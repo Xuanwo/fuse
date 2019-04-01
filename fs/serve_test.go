@@ -78,7 +78,7 @@ func TestMountpointDoesNotExist(t *testing.T) {
 
 type badRootFS struct{}
 
-func (badRootFS) Root() (fs.Node, error) {
+func (badRootFS) Root(ctx context.Context) (fs.Node, error) {
 	// pick a really distinct error, to identify it later
 	return nil, fuse.Errno(syscall.ENAMETOOLONG)
 }
@@ -120,7 +120,7 @@ func (panicSentinel) Errno() fuse.Errno {
 	return fuse.Errno(syscall.ENAMETOOLONG)
 }
 
-func (f testPanic) Root() (fs.Node, error) {
+func (f testPanic) Root(ctx context.Context) (fs.Node, error) {
 	return f, nil
 }
 
@@ -150,7 +150,7 @@ func TestPanic(t *testing.T) {
 
 type testStatFS struct{}
 
-func (f testStatFS) Root() (fs.Node, error) {
+func (f testStatFS) Root(ctx context.Context) (fs.Node, error) {
 	return f, nil
 }
 
@@ -247,7 +247,7 @@ func TestStatfs(t *testing.T) {
 
 type root struct{}
 
-func (f root) Root() (fs.Node, error) {
+func (f root) Root(ctx context.Context) (fs.Node, error) {
 	return f, nil
 }
 

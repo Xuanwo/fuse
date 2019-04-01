@@ -14,9 +14,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
-
-import (
 	"bytes"
 
 	"bazil.org/fuse"
@@ -36,7 +33,7 @@ const (
 // FS* interfaces, for example FSStatfser.
 type FS interface {
 	// Root is called to obtain the Node for the file system root.
-	Root() (Node, error)
+	Root(ctx context.Context) (Node, error)
 }
 
 type FSStatfser interface {
@@ -365,12 +362,12 @@ type Server struct {
 // Serve serves the FUSE connection by making calls to the methods
 // of fs and the Nodes and Handles it makes available.  It returns only
 // when the connection has been closed or an unexpected error occurs.
-func (s *Server) Serve(fs FS) error {
+func (s *Server) Serve(ctx context.Context, fs FS) error {
 	defer s.wg.Wait() // Wait for worker goroutines to complete before return
 
 	s.fs = fs
 
-	root, err := fs.Root()
+	root, err := fs.Root(ctx)
 	if err != nil {
 		return fmt.Errorf("cannot obtain root node: %v", err)
 	}
@@ -405,9 +402,9 @@ func (s *Server) Serve(fs FS) error {
 
 // Serve serves a FUSE connection with the default settings. See
 // Server.Serve.
-func Serve(c *fuse.Conn, fs FS) error {
+func Serve(ctx context.Context, c *fuse.Conn, fs FS) error {
 	server := New(c, nil)
-	return server.Serve(fs)
+	return server.Serve(ctx, fs)
 }
 
 type nothing struct{}
