@@ -54,25 +54,6 @@ type FSDestroyer interface {
 	Destroy()
 }
 
-type FSInodeGenerator interface {
-	// GenerateInode is called to pick a dynamic inode number when it
-	// would otherwise be 0.
-	//
-	// Not all filesystems bother tracking inodes, but FUSE requires
-	// the inode to be set, and fewer duplicates in general makes UNIX
-	// tools work better.
-	//
-	// Operations where the nodes may return 0 inodes include Getattr,
-	// Setattr and ReadDir.
-	//
-	// If FS does not implement FSInodeGenerator, GenerateDynamicInode
-	// is used.
-	//
-	// Implementing this is useful to e.g. constrain the range of
-	// inode values used for dynamic inodes.
-	GenerateInode(parentInode uint64, name string) uint64
-}
-
 // A Node is the interface required of a file or directory.
 // See the documentation for type FS for general information
 // pertaining to all methods.
@@ -344,10 +325,9 @@ type Config struct {
 // Config may be nil.
 func New(conn *fuse.Conn, config *Config) *Server {
 	s := &Server{
-		conn:         conn,
-		req:          map[fuse.RequestID]*serveRequest{},
-		nodeRef:      map[Node]fuse.NodeID{},
-		dynamicInode: GenerateDynamicInode,
+		conn:    conn,
+		req:     map[fuse.RequestID]*serveRequest{},
+		nodeRef: map[Node]fuse.NodeID{},
 	}
 	if config != nil {
 		s.debug = config.Debug
@@ -366,8 +346,7 @@ type Server struct {
 	context func(ctx context.Context, req fuse.Request) context.Context
 
 	// set once at Serve time
-	fs           FS
-	dynamicInode func(parent uint64, name string) uint64
+	fs FS
 
 	// state, protected by meta
 	meta       sync.Mutex
@@ -390,9 +369,6 @@ func (s *Server) Serve(fs FS) error {
 	defer s.wg.Wait() // Wait for worker goroutines to complete before return
 
 	s.fs = fs
-	if dyn, ok := fs.(FSInodeGenerator); ok {
-		s.dynamicInode = dyn.GenerateInode
-	}
 
 	root, err := fs.Root()
 	if err != nil {
@@ -1211,9 +1187,6 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 					}
 					var data []byte
 					for _, dir := range dirs {
-						if dir.Inode == 0 {
-							dir.Inode = c.dynamicInode(snode.inode, dir.Name)
-						}
 						data = fuse.AppendDirent(data, dir)
 					}
 					shandle.readData = data
@@ -1402,9 +1375,6 @@ func (c *Server) handleRequest(ctx context.Context, node Node, snode *serveNode,
 func (c *Server) saveLookup(ctx context.Context, s *fuse.LookupResponse, snode *serveNode, elem string, n2 Node) error {
 	if err := nodeAttr(ctx, n2, &s.Attr); err != nil {
 		return err
-	}
-	if s.Attr.Inode == 0 {
-		s.Attr.Inode = c.dynamicInode(snode.inode, elem)
 	}
 
 	s.Node, s.Generation = c.saveNode(s.Attr.Inode, n2)
